@@ -12,32 +12,35 @@ namespace DemoBot
     {
         bool haveEnabledButtonsBeenReleased = true;
 
+        private double wheelSpeed = 0;
+
         public enum State { Enabled, Disabled, None };
 
         GameController js0 = null;
 
         CTRE.Phoenix.PneumaticControlModule pcm = new PneumaticControlModule(0);
 
-        TalonSRX leftMaster = new TalonSRX(RobotMap.LEFT_MASTER);
-        TalonSRX leftSlave1 = new TalonSRX(RobotMap.LEFT_SLAVE1);
-        TalonSRX leftSlave2 = new TalonSRX(RobotMap.LEFT_SLAVE2);
-        TalonSRX rightMaster = new TalonSRX(RobotMap.RIGHT_MASTER);
-        TalonSRX rightSlave1 = new TalonSRX(RobotMap.RIGHT_SLAVE1);
-        TalonSRX rightSlave2 = new TalonSRX(RobotMap.RIGHT_SLAVE2);
+        VictorSPX leftMaster = new VictorSPX(RobotMap.LEFT_MASTER);
+        VictorSPX leftSlave = new VictorSPX(RobotMap.LEFT_SLAVE);
+        VictorSPX rightMaster = new VictorSPX(RobotMap.RIGHT_MASTER);
+        VictorSPX rightSlave = new VictorSPX(RobotMap.RIGHT_SLAVE);
+        TalonSRX bottomIntake = new TalonSRX(RobotMap.BOTTOM_INTAKE);
+        VictorSPX shooterWheelSlave = new VictorSPX(RobotMap.SHOOTER_WHEEL_SLAVE);
+        //TalonSRX topIntake = new TalonSRX(RobotMap.TOP_INTAKE);
+        TalonSRX shooterWheelMaster = new TalonSRX(RobotMap.SHOOTER_WHEEL_MASTER);
 
         private State currentState = State.None, newState = State.Disabled;
 
         private void robotInit()
         {
             js0 = new GameController(UsbHostDevice.GetInstance());
-            leftSlave1.Follow(leftMaster);
-            leftSlave2.Follow(leftMaster);
-            rightSlave1.Follow(rightMaster);
-            rightSlave2.Follow(rightMaster);
+            leftSlave.Follow(leftMaster);
+            rightSlave.Follow(rightMaster);
+            shooterWheelSlave.Follow(shooterWheelMaster);
 
             rightMaster.SetInverted(true);
-            rightSlave1.SetInverted(true);
-            rightSlave2.SetInverted(true);
+            rightSlave.SetInverted(true);
+            bottomIntake.SetInverted(true);
         }
 
         private void robotPeriodic()
@@ -68,41 +71,37 @@ namespace DemoBot
             pcm.StartCompressor();
 
             leftMaster.SetNeutralMode(NeutralMode.Coast);
-            leftSlave1.SetNeutralMode(NeutralMode.Coast);
-            leftSlave2.SetNeutralMode(NeutralMode.Coast);
+            leftSlave.SetNeutralMode(NeutralMode.Coast);
             rightMaster.SetNeutralMode(NeutralMode.Coast);
-            rightSlave1.SetNeutralMode(NeutralMode.Coast);
-            rightSlave2.SetNeutralMode(NeutralMode.Coast);
+            rightSlave.SetNeutralMode(NeutralMode.Coast);
         }
 
         private void enabledPeriodic()
         {
             // 2 - left and right, right stick
             // 5 - up and down, right stick
-            float power = -0.3f * js0.GetAxis(RobotMap.DRIVE_AXIS);
+            float power = 0.25f * js0.GetAxis(RobotMap.DRIVE_AXIS);
 
-            // cubic function generated with ti regression model
-            // 4x^3 - 6x^2 + 3x
-            power = (float)(4 * Math.Pow(power, 3) - 6 * Math.Pow(power, 2) + 3 * power);
-
-            float rotate = -0.4f * js0.GetAxis(RobotMap.ROTATE_AXIS);
+            float rotate = 0.4f * js0.GetAxis(RobotMap.ROTATE_AXIS);
             drivePercentage(power, rotate);
+
+            runShooterWheel();
+            runIntake();
         }
 
         private void disabledInit()
         {
             Debug.Print("Disabled");
             leftMaster.SetNeutralMode(NeutralMode.Brake);
-            leftSlave1.SetNeutralMode(NeutralMode.Brake);
-            leftSlave2.SetNeutralMode(NeutralMode.Brake);
+            leftSlave.SetNeutralMode(NeutralMode.Brake);
             rightMaster.SetNeutralMode(NeutralMode.Brake);
-            rightSlave1.SetNeutralMode(NeutralMode.Brake);
-            rightSlave2.SetNeutralMode(NeutralMode.Brake);
+            rightSlave.SetNeutralMode(NeutralMode.Brake);
             pcm.StopCompressor();
         }
 
         private void disabledPeriodic()
         {
+            printGamepadAxes();
         }
 
         double[] arcadeDrive(float xSpeed, float zRotation)
@@ -153,8 +152,34 @@ namespace DemoBot
         public void drivePercentage(float speed, float rotation)
         {
             double[] speeds = arcadeDrive(speed, rotation);
-            leftMaster.Set(ControlMode.PercentOutput, speeds[1]);
-            rightMaster.Set(ControlMode.PercentOutput, speeds[0]);
+            leftMaster.Set(ControlMode.PercentOutput, speeds[0]);
+            rightMaster.Set(ControlMode.PercentOutput, speeds[1]);
+        }
+
+        public void runShooterWheel()
+        {
+            if (js0.GetButton(RobotMap.RIGHT_TRIGGER))
+            {
+                wheelSpeed += RobotMap.WHEEL_SPEED_INCR;
+
+                if (wheelSpeed >= RobotMap.MAX_WHEEL_SPEED) wheelSpeed = RobotMap.MAX_WHEEL_SPEED;
+            }
+
+            if (js0.GetButton(RobotMap.B_KEY)) wheelSpeed = 0;
+
+            shooterWheelMaster.Set(ControlMode.PercentOutput, wheelSpeed);
+        }
+
+        public void runIntake()
+        {
+            if (js0.GetButton(RobotMap.LEFT_TRIGGER))
+            {
+                bottomIntake.Set(ControlMode.PercentOutput, RobotMap.INTAKE_SPEED);
+            }
+            else
+            {
+                bottomIntake.Set(ControlMode.PercentOutput, 0);
+            }
         }
 
 
